@@ -83,6 +83,7 @@ client.on("messageCreate", async (message) => {
   5️⃣ Points are tracked after each round. Type \`!score\` to see the current scoreboard.
   6️⃣ Use \`!reset\` to start a new round with the same players.
   7️⃣ Use \`!restart\` and \`!confirm\` to fully reset the game (players + scores).
+  8️⃣ Use \`!end\` to stop the current game which resets everything.
 
   🎯 Example:
   If letters are A and E → valid word could be **"apple"**.
@@ -91,6 +92,7 @@ client.on("messageCreate", async (message) => {
   Good luck and have fun! 🎉`
     );
   }
+  
 
   if (content === "!join") {
     if (players.length === 1 && !players.includes(playerId)) {
@@ -158,6 +160,22 @@ client.on("messageCreate", async (message) => {
       }
     }
   }
+  // end game
+  if (content === "!end") {
+    if (players.length === 0) {
+      return message.channel.send("⚠️ No active game to end.");
+    }
+
+    players = [];
+    scores = {};
+    letters = {};
+    wordGuessed = false;
+    gameChannel = null;
+    pendingRestart = null;
+
+    return message.channel.send("🛑 **Game ended.** All data has been cleared.\nType `!start` to begin a new game anytime.");
+  }
+
 
   // 🔁 Reset round
   if (content === "!reset") {
