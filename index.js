@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Partials, ChannelType } = require("discord.js");
+const { Client, GatewayIntentBits, Partials, ChannelType, EmbedBuilder } = require("discord.js");
 const https = require("https");
 
 const client = new Client({
@@ -30,7 +30,6 @@ client.on("messageCreate", async (message) => {
   const content = message.content.trim().toLowerCase();
   const playerId = message.author.id;
 
-  // 🟣 Handle DM for letter submission
   if (message.channel.type === ChannelType.DM) {
     if (!players.includes(playerId)) return;
 
@@ -51,15 +50,20 @@ client.on("messageCreate", async (message) => {
       const endLetter = letters[players[1]];
       wordGuessed = false;
 
-      return gameChannel.send(
-        `🎯 **Letters revealed!**\n🅰️ Start letter: **${startLetter}**\n🅾️ End letter: **${endLetter}**\n\n🏁 First to type a **valid English word** that starts with **${startLetter}** and ends with **${endLetter}** wins this round!`
-      );
+      const embed = new EmbedBuilder()
+        .setTitle("🎯 Letters Revealed!")
+        .setColor(0xfacc15)
+        .addFields(
+          { name: "💬 Start Letter", value: startLetter, inline: true },
+          { name: "💬 End Letter", value: endLetter, inline: true }
+        )
+        .setDescription("🏁 First to type a **valid English word** using the above letters wins this round!");
+
+      return gameChannel.send({ embeds: [embed] });
     }
 
     return;
   }
-
-  // 🔷 Server-side commands
 
   if (content === "!start") {
     players = [playerId];
@@ -69,30 +73,41 @@ client.on("messageCreate", async (message) => {
     gameChannel = message.channel;
     pendingRestart = null;
 
-    return message.channel.send(
-      `🎮 **Game Started!**\n<@${playerId}> has initiated a new game.\n\n🔹 Another player, type \`!join\` to join.\n🔸 Once both players join, you’ll receive a **DM to privately submit your letter**.\n🏁 First to submit a valid word using both letters wins the round!`
-    );
+    const embed = new EmbedBuilder()
+      .setTitle("🎮 Game Started!")
+      .setDescription(`<@${playerId}> has initiated a new game.`)
+      .addFields(
+        { name: "🔹 Waiting for Player 2", value: "Type `!join` to join the game." },
+        { name: "📩 DM Phase", value: "Both players will receive a **DM** to submit a secret letter." },
+        { name: "🏁 Objective", value: "Form a **valid English word** using those letters — first to do so wins!" }
+      )
+      .setColor(0x00b0f4);
+
+    return message.channel.send({ embeds: [embed] });
   }
+
   if (content === "!rules") {
-    return message.channel.send(
-      `📜 **Game Rules:**\n
-  1️⃣ Type \`!start\` to begin a new game. Another player must type \`!join\` to participate.
-  2️⃣ Once both players have joined, the bot will DM each of you to submit a secret letter.
-  3️⃣ The bot reveals both letters only after both are submitted — one becomes the **starting** letter, the other the **ending** letter.
-  4️⃣ The first player to type a **valid English word** (in this channel) that starts and ends with the given letters wins the round.
-  5️⃣ Points are tracked after each round. Type \`!score\` to see the current scoreboard.
-  6️⃣ Use \`!reset\` to start a new round with the same players.
-  7️⃣ Use \`!restart\` and \`!confirm\` to fully reset the game (players + scores).
-  8️⃣ Use \`!end\` to stop the current game which resets everything.
+    const embed = new EmbedBuilder()
+      .setTitle("📜 Game Rules")
+      .setDescription(`
+1️⃣ Type \`!start\` to begin a new game. Another player must type \`!join\` to participate.
+2️⃣ You will be DM’d to submit one secret letter each.
+3️⃣ Bot reveals both letters once both are submitted.
+4️⃣ First to type a valid English word using those letters wins.
+5️⃣ Type \`!score\` to check current scores.
+6️⃣ Use \`!reset\` to start a new round with same players.
+7️⃣ Use \`!restart\` + \`!confirm\` to reset players and scores.
+8️⃣ Use \`!end\` to stop the game entirely.
 
-  🎯 Example:
-  If letters are A and E → valid word could be **"apple"**.
-  If letters are D and G → valid word could be **"dog"**.
+🎯 Example:
+Letters A and E → Valid word: **apple**
+Letters D and G → Valid word: **dog**
 
-  Good luck and have fun! 🎉`
-    );
+Good luck and have fun! 🎉`)
+      .setColor(0x5865f2);
+
+    return message.channel.send({ embeds: [embed] });
   }
-  
 
   if (content === "!join") {
     if (players.length === 1 && !players.includes(playerId)) {
@@ -119,14 +134,16 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // 📊 Show score
   if (content === "!score") {
     if (players.length === 0) return message.channel.send("⚠️ No active game.");
     const scoreMsg = players.map(id => `👤 <@${id}>: ${scores[id] || 0} point(s)`).join("\n");
-    return message.channel.send(`📊 **Scoreboard:**\n${scoreMsg}`);
+    const embed = new EmbedBuilder()
+      .setTitle("📊 Scoreboard")
+      .setDescription(scoreMsg)
+      .setColor(0x2ecc71);
+    return message.channel.send({ embeds: [embed] });
   }
 
-  // 🆕 Word submission (in server)
   if (Object.keys(letters).length === 2 && !wordGuessed && /^[a-zA-Z]{2,}$/.test(content)) {
     const word = content.toLowerCase();
     const start = letters[players[0]].toLowerCase();
@@ -139,13 +156,19 @@ client.on("messageCreate", async (message) => {
         scores[playerId] = (scores[playerId] || 0) + 1;
         const scoreMsg = players.map(id => `👤 <@${id}>: ${scores[id]} point(s)`).join("\n");
 
-        // Reset round
         letters = {};
         wordGuessed = false;
 
-        return message.channel.send(
-          `🎉 <@${playerId}> wins with the word **"${word}"**!\n\n📊 **Scoreboard:**\n${scoreMsg}\n\n🔁 New round auto-started. I will DM you for next letters.`
-        ).then(async () => {
+        const embed = new EmbedBuilder()
+          .setTitle("🎉 Round Winner!")
+          .setColor(0x57f287)
+          .setDescription(`<@${playerId}> wins with the word **\"${word}\"**!`)
+          .addFields(
+            { name: "📊 Scoreboard", value: scoreMsg },
+            { name: "🔁 New Round", value: "DMs sent to both players for the next secret letters." }
+          );
+
+        return message.channel.send({ embeds: [embed] }).then(async () => {
           for (const id of players) {
             try {
               const user = await client.users.fetch(id);
@@ -156,11 +179,11 @@ client.on("messageCreate", async (message) => {
           }
         });
       } else {
-        return message.channel.send(`❌ The word **"${word}"** is not valid.`);
+        return message.channel.send(`❌ The word **\"${word}\"** is not valid.`);
       }
     }
   }
-  // end game
+
   if (content === "!end") {
     if (players.length === 0) {
       return message.channel.send("⚠️ No active game to end.");
@@ -176,8 +199,6 @@ client.on("messageCreate", async (message) => {
     return message.channel.send("🛑 **Game ended.** All data has been cleared.\nType `!start` to begin a new game anytime.");
   }
 
-
-  // 🔁 Reset round
   if (content === "!reset") {
     letters = {};
     wordGuessed = false;
@@ -195,7 +216,6 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  // 🔄 Restart entire game
   if (content === "!restart") {
     pendingRestart = playerId;
     return message.channel.send(
@@ -218,7 +238,6 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// ✅ Word dictionary check
 function isValidWord(word) {
   return new Promise((resolve) => {
     const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`;
