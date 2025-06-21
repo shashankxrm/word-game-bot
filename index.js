@@ -73,6 +73,24 @@ client.on("messageCreate", async (message) => {
       `🎮 **Game Started!**\n<@${playerId}> has initiated a new game.\n\n🔹 Another player, type \`!join\` to join.\n🔸 Once both players join, you’ll receive a **DM to privately submit your letter**.\n🏁 First to submit a valid word using both letters wins the round!`
     );
   }
+  if (content === "!rules") {
+    return message.channel.send(
+      `📜 **Game Rules:**\n
+  1️⃣ Type \`!start\` to begin a new game. Another player must type \`!join\` to participate.
+  2️⃣ Once both players have joined, the bot will DM each of you to submit a secret letter.
+  3️⃣ The bot reveals both letters only after both are submitted — one becomes the **starting** letter, the other the **ending** letter.
+  4️⃣ The first player to type a **valid English word** (in this channel) that starts and ends with the given letters wins the round.
+  5️⃣ Points are tracked after each round. Type \`!score\` to see the current scoreboard.
+  6️⃣ Use \`!reset\` to start a new round with the same players.
+  7️⃣ Use \`!restart\` and \`!confirm\` to fully reset the game (players + scores).
+
+  🎯 Example:
+  If letters are A and E → valid word could be **"apple"**.
+  If letters are D and G → valid word could be **"dog"**.
+
+  Good luck and have fun! 🎉`
+    );
+  }
 
   if (content === "!join") {
     if (players.length === 1 && !players.includes(playerId)) {
