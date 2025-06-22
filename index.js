@@ -20,6 +20,10 @@ let wordGuessed = false;
 let gameChannel = null;
 let pendingRestart = null;
 
+let currentWord = null;
+let hintLevel = 0;
+let hintTimeout = null;
+
 client.once("ready", () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 });
@@ -50,6 +54,11 @@ client.on("messageCreate", async (message) => {
       const endLetter = letters[players[1]];
       wordGuessed = false;
 
+      // Generate secret word for hint
+      currentWord = await fetchValidWord(startLetter, endLetter);
+      hintLevel = 0;
+      scheduleNextHint();
+
       const embed = new EmbedBuilder()
         .setTitle("🎯 Letters Revealed!")
         .setColor(0xfacc15)
@@ -57,7 +66,7 @@ client.on("messageCreate", async (message) => {
           { name: "💬 Start Letter", value: startLetter, inline: true },
           { name: "💬 End Letter", value: endLetter, inline: true }
         )
-        .setDescription("🏁 First to type a **valid English word** using the above letters wins this round!");
+        .setDescription("🏁 First to type a **valid English word** using the above letters wins this round!\nUse `!hint` to get a clue.");
 
       return gameChannel.send({ embeds: [embed] });
     }
@@ -72,6 +81,7 @@ client.on("messageCreate", async (message) => {
     wordGuessed = false;
     gameChannel = message.channel;
     pendingRestart = null;
+    resetHintState();
 
     const embed = new EmbedBuilder()
       .setTitle("🎮 Game Started!")
@@ -94,16 +104,11 @@ client.on("messageCreate", async (message) => {
 2️⃣ You will be DM’d to submit one secret letter each.
 3️⃣ Bot reveals both letters once both are submitted.
 4️⃣ First to type a valid English word using those letters wins.
-5️⃣ Type \`!score\` to check current scores.
-6️⃣ Use \`!reset\` to start a new round with same players.
-7️⃣ Use \`!restart\` + \`!confirm\` to reset players and scores.
-8️⃣ Use \`!end\` to stop the game entirely.
-
-🎯 Example:
-Letters A and E → Valid word: **apple**
-Letters D and G → Valid word: **dog**
-
-Good luck and have fun! 🎉`)
+5️⃣ Use \`!score\` to check current scores.
+6️⃣ Use \`!hint\` to get a clue during the round.
+7️⃣ Use \`!reset\` to start a new round with same players.
+8️⃣ Use \`!restart\` + \`!confirm\` to reset players and scores.
+9️⃣ Use \`!end\` to stop the game entirely.`)
       .setColor(0x5865f2);
 
     return message.channel.send({ embeds: [embed] });
@@ -144,6 +149,19 @@ Good luck and have fun! 🎉`)
     return message.channel.send({ embeds: [embed] });
   }
 
+  if (content === "!hint") {
+    if (!currentWord || wordGuessed) return message.channel.send("⚠️ No hint available right now.");
+
+    hintLevel++;
+    const hint = generateHint(currentWord, hintLevel);
+    if (hint) {
+      scheduleNextHint();
+      return message.channel.send(`💡 Hint Level ${hintLevel}: \`${hint}\``);
+    } else {
+      return message.channel.send("❌ No further hints available.");
+    }
+  }
+
   if (Object.keys(letters).length === 2 && !wordGuessed && /^[a-zA-Z]{2,}$/.test(content)) {
     const word = content.toLowerCase();
     const start = letters[players[0]].toLowerCase();
@@ -155,20 +173,20 @@ Good luck and have fun! 🎉`)
         wordGuessed = true;
         scores[playerId] = (scores[playerId] || 0) + 1;
         const scoreMsg = players.map(id => `👤 <@${id}>: ${scores[id]} point(s)`).join("\n");
-
-        letters = {};
-        wordGuessed = false;
+        resetHintState();
 
         const embed = new EmbedBuilder()
           .setTitle("🎉 Round Winner!")
           .setColor(0x57f287)
-          .setDescription(`<@${playerId}> wins with the word **\"${word}\"**!`)
+          .setDescription(`<@${playerId}> wins with the word **"${word}"**!`)
           .addFields(
             { name: "📊 Scoreboard", value: scoreMsg },
             { name: "🔁 New Round", value: "DMs sent to both players for the next secret letters." }
           );
 
         return message.channel.send({ embeds: [embed] }).then(async () => {
+          letters = {};
+          wordGuessed = false;
           for (const id of players) {
             try {
               const user = await client.users.fetch(id);
@@ -179,7 +197,7 @@ Good luck and have fun! 🎉`)
           }
         });
       } else {
-        return message.channel.send(`❌ The word **\"${word}\"** is not valid.`);
+        return message.channel.send(`❌ The word **"${word}"** is not valid.`);
       }
     }
   }
@@ -189,6 +207,7 @@ Good luck and have fun! 🎉`)
       return message.channel.send("⚠️ No active game to end.");
     }
 
+    resetHintState();
     players = [];
     scores = {};
     letters = {};
@@ -200,6 +219,7 @@ Good luck and have fun! 🎉`)
   }
 
   if (content === "!reset") {
+    resetHintState();
     letters = {};
     wordGuessed = false;
     message.channel.send("🔁 Round reset. I will DM both players again.");
@@ -224,6 +244,7 @@ Good luck and have fun! 🎉`)
   }
 
   if (content === "!confirm" && playerId === pendingRestart) {
+    resetHintState();
     players = [];
     scores = {};
     letters = {};
@@ -238,13 +259,60 @@ Good luck and have fun! 🎉`)
   }
 });
 
+// ✅ Dictionary check
 function isValidWord(word) {
   return new Promise((resolve) => {
     const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`;
-    https.get(url, (res) => {
-      resolve(res.statusCode === 200);
-    }).on("error", () => resolve(false));
+    https.get(url, (res) => resolve(res.statusCode === 200)).on("error", () => resolve(false));
   });
+}
+
+// 🧠 Hint Word Generator
+function fetchValidWord(start, end) {
+  return new Promise((resolve) => {
+    const url = `https://api.datamuse.com/words?sp=${start}*${end}&max=50`;
+    https.get(url, (res) => {
+      let raw = "";
+      res.on("data", chunk => raw += chunk);
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(raw);
+          const words = data.map(entry => entry.word).filter(w => /^[a-z]+$/.test(w));
+          resolve(words[Math.floor(Math.random() * words.length)] || null);
+        } catch {
+          resolve(null);
+        }
+      });
+    }).on("error", () => resolve(null));
+  });
+}
+
+// 🧩 Hint logic
+function generateHint(word, level) {
+  if (!word) return null;
+  if (level >= word.length - 1) return word;
+  return word.slice(0, level) + "*".repeat(word.length - level);
+}
+
+function scheduleNextHint() {
+  clearTimeout(hintTimeout);
+  hintTimeout = setTimeout(() => {
+    if (!wordGuessed && currentWord) {
+      hintLevel++;
+      const hint = generateHint(currentWord, hintLevel);
+      if (hint && gameChannel) {
+        gameChannel.send(`💡 Hint Level ${hintLevel}: \`${hint}\``);
+        scheduleNextHint();
+      }
+    }
+  }, 10000);
+}
+
+function resetHintState() {
+  clearTimeout(hintTimeout);
+  currentWord = null;
+  hintLevel = 0;
+  hintTimeout = null;
 }
 
 client.login(token);
