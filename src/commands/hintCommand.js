@@ -20,12 +20,9 @@ async function handleHintCommand(message, gameState) {
 
   const hint = generateHint(gameState.currentWord, newLevel, definition);
   
-  if (hint) {
-    scheduleNextHint(gameState);
-    await message.channel.send(`💡 Hint Level ${newLevel}: ${hint}`);
-  } else {
-    await message.channel.send("❌ No further hints available.");
-  }
+  // With the updated generateHint, this should always return a hint
+  scheduleNextHint(gameState);
+  await message.channel.send(`💡 Hint Level ${newLevel}: ${hint}`);
 }
 
 module.exports = { handleHintCommand };

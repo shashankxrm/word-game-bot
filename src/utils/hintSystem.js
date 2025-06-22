@@ -69,7 +69,7 @@ function generateHint(word, level, definition = null) {
       return `Jumbled hint: \`${shuffleWord(word)}\``;
 
     case 3:
-      return definition ? `Definition: *${definition}*` : null;
+      return definition ? `Definition: *${definition}*` : `Hint: \`${maskPattern(word)}\``;
 
     case 4:
       return `Hint: \`${maskPattern(word)}\``;
@@ -143,6 +143,10 @@ function scheduleNextHint(gameState, delay = 10000) {
       if (hint) {
         await gameState.gameChannel.send(`💡 Hint Level ${newLevel}: ${hint}`);
         scheduleNextHint(gameState, delay);
+      } else {
+        // If hint generation failed, try the next level immediately
+        console.log(`Hint level ${newLevel} failed, trying next level...`);
+        scheduleNextHint(gameState, 1000); // Try next level in 1 second
       }
     }
   }, delay);
