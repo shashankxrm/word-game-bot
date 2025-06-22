@@ -1,9 +1,11 @@
 {
-  "name": "nodejs",
+  "name": "word-game-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A Discord bot for playing word games",
+  "main": "src/bot.js",
   "scripts": {
+    "start": "node src/bot.js",
+    "dev": "nodemon src/bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,5 +14,8 @@
   "dependencies": {
     "@types/node": "^22.13.11",
     "discord.js": "^14.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }
