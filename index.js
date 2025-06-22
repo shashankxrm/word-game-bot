@@ -286,27 +286,96 @@ function fetchValidWord(start, end) {
     }).on("error", () => resolve(null));
   });
 }
+// 📚 Fetch dictionary definition for a word
+function fetchDefinition(word) {
+  return new Promise((resolve) => {
+    const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`;
+    https.get(url, (res) => {
+      let data = '';
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          const def = parsed[0]?.meanings?.[0]?.definitions?.[0]?.definition;
+          resolve(def || null);
+        } catch {
+          resolve(null);
+        }
+      });
+    }).on("error", () => resolve(null));
+  });
+}
 
 // 🧩 Hint logic
-function generateHint(word, level) {
+function generateHint(word, level, definition = null) {
   if (!word) return null;
-  if (level >= word.length - 1) return word;
-  return word.slice(0, level) + "*".repeat(word.length - level);
+
+  const len = word.length;
+
+  switch (level) {
+    case 1:
+      return `The word has **${len} letters**.`;
+
+    case 2:
+      return `Jumbled hint: \`${shuffleWord(word)}\``;
+
+    case 3:
+      return definition ? `Definition: *${definition}*` : null;
+
+    case 4:
+      return `Hint: \`${maskPattern(word)}\``;
+
+    default:
+      return `Hint: \`${revealRandomLetters(word, level - 4)}\``;
+  }
 }
+function shuffleWord(word) {
+  const arr = word.split('');
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join('');
+}
+
+function maskPattern(word) {
+  return word.split('').map(ch => /[aeiou]/i.test(ch) ? ch : '_').join('');
+}
+
+function revealRandomLetters(word, revealCount) {
+  const indices = Array.from({ length: word.length }, (_, i) => i);
+  const revealed = new Set();
+
+  while (revealed.size < Math.min(revealCount, word.length)) {
+    const idx = indices[Math.floor(Math.random() * indices.length)];
+    revealed.add(idx);
+  }
+
+  return word.split('').map((ch, i) => revealed.has(i) ? ch : '_').join('');
+}
+
 
 function scheduleNextHint() {
   clearTimeout(hintTimeout);
-  hintTimeout = setTimeout(() => {
-    if (!wordGuessed && currentWord) {
+  hintTimeout = setTimeout(async () => {
+    if (!wordGuessed && currentWord && gameChannel) {
       hintLevel++;
-      const hint = generateHint(currentWord, hintLevel);
-      if (hint && gameChannel) {
-        gameChannel.send(`💡 Hint Level ${hintLevel}: \`${hint}\``);
+
+      let definition = null;
+      if (hintLevel === 3) {
+        definition = await fetchDefinition(currentWord);
+      }
+
+      const hint = generateHint(currentWord, hintLevel, definition);
+
+      if (hint) {
+        await gameChannel.send(`💡 Hint Level ${hintLevel}: ${hint}`);
         scheduleNextHint();
       }
     }
   }, 10000);
 }
+
 
 function resetHintState() {
   clearTimeout(hintTimeout);
