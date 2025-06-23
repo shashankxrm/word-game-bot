@@ -5,13 +5,57 @@ const https = require("https");
  * @param {string} word - The word to validate
  * @returns {Promise<boolean>} - True if the word is valid, false otherwise
  */
-function isValidWord(word) {
+function isValidWordInDictionary(word) {
   return new Promise((resolve) => {
     const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`;
     https.get(url, (res) => {
       resolve(res.statusCode === 200);
     }).on("error", () => resolve(false));
   });
+}
+
+/**
+ * Validates if a word exists in Datamuse API
+ * @param {string} word - The word to validate
+ * @returns {Promise<boolean>} - True if the word exists in Datamuse, false otherwise
+ */
+function isValidWordInDatamuse(word) {
+  return new Promise((resolve) => {
+    const url = `https://api.datamuse.com/words?sp=${word}&max=1`;
+    https.get(url, (res) => {
+      let raw = "";
+      res.on("data", chunk => raw += chunk);
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(raw);
+          const exactMatch = data.find(entry => entry.word.toLowerCase() === word.toLowerCase());
+          resolve(!!exactMatch);
+        } catch {
+          resolve(false);
+        }
+      });
+    }).on("error", () => resolve(false));
+  });
+}
+
+/**
+ * Validates if a word is valid in either Dictionary API or Datamuse API
+ * @param {string} word - The word to validate
+ * @returns {Promise<boolean>} - True if the word is valid in at least one API, false otherwise
+ */
+async function isValidWord(word) {
+  try {
+    const [dictionaryValid, datamuseValid] = await Promise.all([
+      isValidWordInDictionary(word),
+      isValidWordInDatamuse(word)
+    ]);
+    
+    // Return true if valid in either API
+    return dictionaryValid || datamuseValid;
+  } catch (error) {
+    console.error("Error validating word:", error);
+    return false;
+  }
 }
 
 /**
